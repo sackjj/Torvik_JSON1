@@ -31,7 +31,14 @@ def fetch_barttorvik(year: int, output_path: str):
     url = f"https://barttorvik.com/getadvstats.php?year={year}"
     print(f"[Barttorvik] Fetching {url} ...")
 
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://barttorvik.com/",
+    }
+
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=30) as resp:
         raw = resp.read().decode("utf-8")
 
