@@ -38,25 +38,14 @@ def fetch_barttorvik(year: int, output_path: str):
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        # Intercept the JSON response
-        raw_json = {}
+        # Navigate directly to the JSON endpoint and grab the page body
+        page.goto(url, timeout=30000, wait_until="domcontentloaded")
 
-        def handle_response(response):
-            if "getadvstats.php" in response.url:
-                try:
-                    raw_json["data"] = response.json()
-                except Exception:
-                    raw_json["data"] = json.loads(response.text())
-
-        page.on("response", handle_response)
-        page.goto(url, timeout=30000, wait_until="networkidle")
+        # The page body will just be the raw JSON text
+        body = page.locator("body").inner_text()
         browser.close()
 
-    data = raw_json.get("data")
-    if not data:
-        # Fallback: parse the page body directly
-        raise RuntimeError("[Barttorvik] No data captured from response.")
-
+    data = json.loads(body)
     print(f"[Barttorvik] {len(data)} rows fetched")
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -103,7 +92,6 @@ def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_p
     user_id = token_data.get("user_id", "")
     expiration_time = int(datetime.now().timestamp() * 1000) + 3600000
 
-    # Build the full Firebase auth object that evanmiya.com expects in localStorage
     auth_object = {
         "uid": user_id,
         "email": "sackjj2@gmail.com",
@@ -128,18 +116,15 @@ def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_p
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 
-        # Load the page first so localStorage is accessible
         page.goto("https://evanmiya.com", timeout=30000)
         page.wait_for_load_state("domcontentloaded")
 
-        # Write the full Firebase auth object into localStorage
         auth_json = json.dumps(auth_object)
         page.evaluate(f"""() => {{
             localStorage.setItem({json.dumps(firebase_key)}, {json.dumps(auth_json)});
         }}""")
         print("[EvanMiya] Auth object written to localStorage.")
 
-        # Navigate to Player Ratings and wait for the download button
         print("[EvanMiya] Navigating to Player Ratings ...")
         page.goto("https://evanmiya.com/?player_ratings", timeout=30000)
         page.wait_for_load_state("networkidle")
@@ -162,10 +147,10 @@ def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_p
 if __name__ == "__main__":
     year = int(sys.argv[1]) if len(sys.argv) > 1 else datetime.now().year
 
-    # Barttorvik (uses Playwright to bypass 403)
+    # Barttorvik
     fetch_barttorvik(year, f"barttorvik_{year}.csv")
 
-    # EvanMiya (uses Firebase refresh token)
+    # EvanMiya
     api_key       = os.environ.get("EVANMIYA_FIREBASE_API_KEY")
     refresh_token = os.environ.get("EVANMIYA_REFRESH_TOKEN")
     firebase_key  = os.environ.get("EVANMIYA_FIREBASE_KEY")
