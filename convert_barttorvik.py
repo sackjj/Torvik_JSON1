@@ -100,30 +100,18 @@ def fetch_evanmiya(api_key: str, refresh_token: str, output_path: str):
             }}
         }}""")
 
-        # Navigate to Player Ratings
+        # Navigate to Player Ratings and wait for the download button to appear
         print("[EvanMiya] Navigating to Player Ratings ...")
         page.goto("https://evanmiya.com/?player_ratings", timeout=30000)
         page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(3000)  # let the JS table fully render
 
-        # Click the CSV download button
-        print("[EvanMiya] Triggering CSV download ...")
+        # Wait for the specific download button to be visible
+        page.wait_for_selector("#player_ratings_page_download_player_ratings", timeout=20000)
+        print("[EvanMiya] Download button found, clicking ...")
+
+        # Click and capture the download
         with page.expect_download(timeout=30000) as download_info:
-            for selector in [
-                "text=CSV",
-                "text=Download CSV",
-                "text=Export CSV",
-                "button:has-text('CSV')",
-                "[aria-label*='csv' i]",
-                "[title*='csv' i]",
-                "a[href*='csv']",
-            ]:
-                try:
-                    if page.locator(selector).count() > 0:
-                        page.click(selector)
-                        break
-                except Exception:
-                    continue
+            page.click("#player_ratings_page_download_player_ratings")
 
         download = download_info.value
         download.save_as(output_path)
