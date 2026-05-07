@@ -28,21 +28,35 @@ BARTTORVIK_HEADERS = [
 # ── Barttorvik ─────────────────────────────────────────────────────────────────
 
 def fetch_barttorvik(year: int, output_path: str):
+    """Use Playwright to fetch Barttorvik JSON as a real browser request."""
+    from playwright.sync_api import sync_playwright
+
     url = f"https://barttorvik.com/getadvstats.php?year={year}"
     print(f"[Barttorvik] Fetching {url} ...")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://barttorvik.com/",
-    }
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read().decode("utf-8")
+        # Intercept the JSON response
+        raw_json = {}
 
-    data = json.loads(raw)
+        def handle_response(response):
+            if "getadvstats.php" in response.url:
+                try:
+                    raw_json["data"] = response.json()
+                except Exception:
+                    raw_json["data"] = json.loads(response.text())
+
+        page.on("response", handle_response)
+        page.goto(url, timeout=30000, wait_until="networkidle")
+        browser.close()
+
+    data = raw_json.get("data")
+    if not data:
+        # Fallback: parse the page body directly
+        raise RuntimeError("[Barttorvik] No data captured from response.")
+
     print(f"[Barttorvik] {len(data)} rows fetched")
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -61,7 +75,7 @@ def fetch_barttorvik(year: int, output_path: str):
 # ── EvanMiya ───────────────────────────────────────────────────────────────────
 
 def get_firebase_id_token(api_key: str, refresh_token: str) -> dict:
-    """Exchange a Firebase refresh token for a fresh ID token and new refresh token."""
+    """Exchange a Firebase refresh token for a fresh ID token."""
     url = f"https://securetoken.googleapis.com/v1/token?key={api_key}"
     body = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -148,10 +162,10 @@ def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_p
 if __name__ == "__main__":
     year = int(sys.argv[1]) if len(sys.argv) > 1 else datetime.now().year
 
-    # Barttorvik (no auth needed)
+    # Barttorvik (uses Playwright to bypass 403)
     fetch_barttorvik(year, f"barttorvik_{year}.csv")
 
-    # EvanMiya (uses Firebase refresh token — never expires)
+    # EvanMiya (uses Firebase refresh token)
     api_key       = os.environ.get("EVANMIYA_FIREBASE_API_KEY")
     refresh_token = os.environ.get("EVANMIYA_REFRESH_TOKEN")
     firebase_key  = os.environ.get("EVANMIYA_FIREBASE_KEY")
