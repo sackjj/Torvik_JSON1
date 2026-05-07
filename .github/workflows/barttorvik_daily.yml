@@ -1,37 +1,49 @@
 name: Daily Barttorvik + EvanMiya Stats CSV
- 
+
 on:
   schedule:
     # Runs every day at 6:00 AM UTC (midnight Mountain Time)
     - cron: "0 6 * * *"
   workflow_dispatch:  # Allows manual trigger from the Actions tab
- 
+
 jobs:
   convert:
     runs-on: ubuntu-latest
- 
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
- 
+
+      - name: Fetch Barttorvik JSON via curl
+        run: |
+          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+            -H "Accept: application/json" \
+            -H "Referer: https://barttorvik.com/" \
+            --compressed \
+            "https://barttorvik.com/getadvstats.php?year=2026" \
+            -o barttorvik_raw.json
+          echo "[Barttorvik] Downloaded $(wc -c < barttorvik_raw.json) bytes"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
- 
+
       - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install playwright
           playwright install chromium
           playwright install-deps chromium
- 
+
       - name: Run conversion scripts
         env:
           EVANMIYA_FIREBASE_API_KEY: ${{ secrets.EVANMIYA_FIREBASE_API_KEY }}
           EVANMIYA_REFRESH_TOKEN: ${{ secrets.EVANMIYA_REFRESH_TOKEN }}
+          EVANMIYA_FIREBASE_KEY: ${{ secrets.EVANMIYA_FIREBASE_KEY }}
         run: |
           python convert_barttorvik.py 2026
- 
+
       - name: Commit and push updated CSVs
         run: |
           git config user.name "github-actions[bot]"
