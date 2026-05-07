@@ -28,19 +28,14 @@ BARTTORVIK_HEADERS = [
 # ── Barttorvik ─────────────────────────────────────────────────────────────────
 
 def fetch_barttorvik(year: int, output_path: str):
-    """
-    Uses curl_cffi to spoof a real Chrome TLS fingerprint, bypassing Cloudflare.
-    """
-    from curl_cffi import requests as cffi_requests
+    """Read Barttorvik data from pre-downloaded JSON file (fetched by curl in workflow)."""
+    raw_path = "barttorvik_raw.json"
+    print(f"[Barttorvik] Reading {raw_path} ...")
 
-    url = f"https://barttorvik.com/getadvstats.php?year={year}"
-    print(f"[Barttorvik] Fetching {url} ...")
+    with open(raw_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    resp = cffi_requests.get(url, impersonate="chrome124", timeout=30)
-    resp.raise_for_status()
-
-    data = resp.json()
-    print(f"[Barttorvik] {len(data)} rows fetched")
+    print(f"[Barttorvik] {len(data)} rows loaded")
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

@@ -14,6 +14,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Fetch Barttorvik JSON via curl
+        run: |
+          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+            -H "Accept: application/json" \
+            -H "Referer: https://barttorvik.com/" \
+            --compressed \
+            "https://barttorvik.com/getadvstats.php?year=2026" \
+            -o barttorvik_raw.json
+          echo "[Barttorvik] Downloaded $(wc -c < barttorvik_raw.json) bytes"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install "curl_cffi>=0.6.0" playwright
+          pip install playwright
           playwright install chromium
           playwright install-deps chromium
 
