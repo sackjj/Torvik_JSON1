@@ -28,22 +28,18 @@ BARTTORVIK_HEADERS = [
 # ── Barttorvik ─────────────────────────────────────────────────────────────────
 
 def fetch_barttorvik(year: int, output_path: str):
-    from playwright.sync_api import sync_playwright
+    """
+    Uses curl_cffi to spoof a real Chrome TLS fingerprint, bypassing Cloudflare.
+    """
+    from curl_cffi import requests as cffi_requests
 
     url = f"https://barttorvik.com/getadvstats.php?year={year}"
     print(f"[Barttorvik] Fetching {url} ...")
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=30000, wait_until="domcontentloaded")
-        body = page.locator("body").inner_text()
-        browser.close()
+    resp = cffi_requests.get(url, impersonate="chrome124", timeout=30)
+    resp.raise_for_status()
 
-    # Debug: print the first 300 chars so we can see what came back
-    print(f"[Barttorvik] Raw response (first 300 chars): {repr(body[:300])}")
-
-    data = json.loads(body)
+    data = resp.json()
     print(f"[Barttorvik] {len(data)} rows fetched")
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
