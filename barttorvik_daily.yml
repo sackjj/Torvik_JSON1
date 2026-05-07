@@ -29,6 +29,7 @@ jobs:
         env:
           EVANMIYA_FIREBASE_API_KEY: ${{ secrets.EVANMIYA_FIREBASE_API_KEY }}
           EVANMIYA_REFRESH_TOKEN: ${{ secrets.EVANMIYA_REFRESH_TOKEN }}
+          EVANMIYA_FIREBASE_KEY: ${{ secrets.EVANMIYA_FIREBASE_KEY }}
         run: |
           python convert_barttorvik.py 2026
 

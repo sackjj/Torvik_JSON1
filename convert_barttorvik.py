@@ -60,8 +60,8 @@ def fetch_barttorvik(year: int, output_path: str):
 
 # ── EvanMiya ───────────────────────────────────────────────────────────────────
 
-def get_firebase_id_token(api_key: str, refresh_token: str) -> str:
-    """Exchange a Firebase refresh token for a fresh ID token (valid 1 hour)."""
+def get_firebase_id_token(api_key: str, refresh_token: str) -> dict:
+    """Exchange a Firebase refresh token for a fresh ID token and new refresh token."""
     url = f"https://securetoken.googleapis.com/v1/token?key={api_key}"
     body = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -73,18 +73,40 @@ def get_firebase_id_token(api_key: str, refresh_token: str) -> str:
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
-    id_token = data.get("id_token")
-    if not id_token:
+    if not data.get("id_token"):
         raise RuntimeError(f"Failed to get id_token. Response: {data}")
     print("[EvanMiya] Firebase id_token obtained.")
-    return id_token
+    return data
 
 
-def fetch_evanmiya(api_key: str, refresh_token: str, output_path: str):
-    """Log into EvanMiya via Firebase token and download the Player Ratings CSV."""
+def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_path: str):
+    """Log into EvanMiya by building a full Firebase auth object in localStorage."""
     from playwright.sync_api import sync_playwright
 
-    id_token = get_firebase_id_token(api_key, refresh_token)
+    token_data = get_firebase_id_token(api_key, refresh_token)
+    id_token = token_data["id_token"]
+    new_refresh_token = token_data.get("refresh_token", refresh_token)
+    user_id = token_data.get("user_id", "")
+    expiration_time = int(datetime.now().timestamp() * 1000) + 3600000
+
+    # Build the full Firebase auth object that evanmiya.com expects in localStorage
+    auth_object = {
+        "uid": user_id,
+        "email": "sackjj2@gmail.com",
+        "emailVerified": True,
+        "displayName": "Jeff Sack",
+        "isAnonymous": False,
+        "providerData": [{"providerId": "google.com", "uid": user_id, "email": "sackjj2@gmail.com"}],
+        "stsTokenManager": {
+            "refreshToken": new_refresh_token,
+            "accessToken": id_token,
+            "expirationTime": expiration_time,
+        },
+        "createdAt": "1712172499187",
+        "lastLoginAt": "1776871942979",
+        "apiKey": api_key,
+        "appName": "[DEFAULT]",
+    }
 
     print("[EvanMiya] Launching browser ...")
     with sync_playwright() as p:
@@ -96,27 +118,21 @@ def fetch_evanmiya(api_key: str, refresh_token: str, output_path: str):
         page.goto("https://evanmiya.com", timeout=30000)
         page.wait_for_load_state("domcontentloaded")
 
-        # Inject fresh access token into the existing Firebase localStorage entry
+        # Write the full Firebase auth object into localStorage
+        auth_json = json.dumps(auth_object)
         page.evaluate(f"""() => {{
-            const key = Object.keys(localStorage).find(k => k.startsWith('firebase:authUser'));
-            if (key) {{
-                const existing = JSON.parse(localStorage.getItem(key));
-                existing.stsTokenManager.accessToken = "{id_token}";
-                existing.stsTokenManager.expirationTime = Date.now() + 3600000;
-                localStorage.setItem(key, JSON.stringify(existing));
-            }}
+            localStorage.setItem({json.dumps(firebase_key)}, {json.dumps(auth_json)});
         }}""")
+        print("[EvanMiya] Auth object written to localStorage.")
 
-        # Navigate to Player Ratings and wait for the download button to appear
+        # Navigate to Player Ratings and wait for the download button
         print("[EvanMiya] Navigating to Player Ratings ...")
         page.goto("https://evanmiya.com/?player_ratings", timeout=30000)
         page.wait_for_load_state("networkidle")
 
-        # Wait for the specific download button to be visible
         page.wait_for_selector("#player_ratings_page_download_player_ratings", timeout=20000)
         print("[EvanMiya] Download button found, clicking ...")
 
-        # Click and capture the download
         with page.expect_download(timeout=30000) as download_info:
             page.click("#player_ratings_page_download_player_ratings")
 
@@ -138,8 +154,9 @@ if __name__ == "__main__":
     # EvanMiya (uses Firebase refresh token — never expires)
     api_key       = os.environ.get("EVANMIYA_FIREBASE_API_KEY")
     refresh_token = os.environ.get("EVANMIYA_REFRESH_TOKEN")
+    firebase_key  = os.environ.get("EVANMIYA_FIREBASE_KEY")
 
-    if not api_key or not refresh_token:
-        print("[EvanMiya] Skipping — EVANMIYA_FIREBASE_API_KEY or EVANMIYA_REFRESH_TOKEN not set.")
+    if not api_key or not refresh_token or not firebase_key:
+        print("[EvanMiya] Skipping — one or more secrets not set: EVANMIYA_FIREBASE_API_KEY, EVANMIYA_REFRESH_TOKEN, EVANMIYA_FIREBASE_KEY")
     else:
-        fetch_evanmiya(api_key, refresh_token, f"evanmiya_{year}.csv")
+        fetch_evanmiya(api_key, refresh_token, firebase_key, f"evanmiya_{year}.csv")
