@@ -28,7 +28,6 @@ BARTTORVIK_HEADERS = [
 # ── Barttorvik ─────────────────────────────────────────────────────────────────
 
 def fetch_barttorvik(year: int, output_path: str):
-    """Use Playwright to fetch Barttorvik JSON as a real browser request."""
     from playwright.sync_api import sync_playwright
 
     url = f"https://barttorvik.com/getadvstats.php?year={year}"
@@ -37,13 +36,12 @@ def fetch_barttorvik(year: int, output_path: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-
-        # Navigate directly to the JSON endpoint and grab the page body
         page.goto(url, timeout=30000, wait_until="domcontentloaded")
-
-        # The page body will just be the raw JSON text
         body = page.locator("body").inner_text()
         browser.close()
+
+    # Debug: print the first 300 chars so we can see what came back
+    print(f"[Barttorvik] Raw response (first 300 chars): {repr(body[:300])}")
 
     data = json.loads(body)
     print(f"[Barttorvik] {len(data)} rows fetched")
@@ -64,7 +62,6 @@ def fetch_barttorvik(year: int, output_path: str):
 # ── EvanMiya ───────────────────────────────────────────────────────────────────
 
 def get_firebase_id_token(api_key: str, refresh_token: str) -> dict:
-    """Exchange a Firebase refresh token for a fresh ID token."""
     url = f"https://securetoken.googleapis.com/v1/token?key={api_key}"
     body = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -83,7 +80,6 @@ def get_firebase_id_token(api_key: str, refresh_token: str) -> dict:
 
 
 def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_path: str):
-    """Log into EvanMiya by building a full Firebase auth object in localStorage."""
     from playwright.sync_api import sync_playwright
 
     token_data = get_firebase_id_token(api_key, refresh_token)
@@ -147,15 +143,13 @@ def fetch_evanmiya(api_key: str, refresh_token: str, firebase_key: str, output_p
 if __name__ == "__main__":
     year = int(sys.argv[1]) if len(sys.argv) > 1 else datetime.now().year
 
-    # Barttorvik
     fetch_barttorvik(year, f"barttorvik_{year}.csv")
 
-    # EvanMiya
     api_key       = os.environ.get("EVANMIYA_FIREBASE_API_KEY")
     refresh_token = os.environ.get("EVANMIYA_REFRESH_TOKEN")
     firebase_key  = os.environ.get("EVANMIYA_FIREBASE_KEY")
 
     if not api_key or not refresh_token or not firebase_key:
-        print("[EvanMiya] Skipping — one or more secrets not set: EVANMIYA_FIREBASE_API_KEY, EVANMIYA_REFRESH_TOKEN, EVANMIYA_FIREBASE_KEY")
+        print("[EvanMiya] Skipping — one or more secrets not set.")
     else:
         fetch_evanmiya(api_key, refresh_token, firebase_key, f"evanmiya_{year}.csv")
